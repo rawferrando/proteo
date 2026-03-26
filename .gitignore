@@ -1,0 +1,3 @@
+data/
+*.bak
+__pycache__/

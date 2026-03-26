@@ -1,117 +1,77 @@
 <!DOCTYPE html>
-<html lang="es">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PRESENS Monitor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>PRESENS Monitor Pro</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .dashboard { background: white; width: 100%; max-width: 500px; border-radius: 24px; padding: 30px; box-shadow: 0 20px 25px rgba(0,0,0,0.2); }
+        .status-badge { float: right; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.8rem; }
+        .active { background: #c6f6d5; color: #2f855a; }
+        .stopped { background: #fed7d7; color: #c53030; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .card { background: #f7fafc; padding: 15px; border-radius: 15px; border: 1px solid #edf2f7; }
+        .label { font-size: 0.7rem; color: #a0aec0; text-transform: uppercase; font-weight: bold; }
+        .value { font-size: 1.5rem; font-weight: bold; color: #2d3748; margin-top: 5px; }
+        .controls { display: flex; gap: 10px; margin: 20px 0; }
+        button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; }
+        .btn-set { background: #667eea; color: white; width: auto; flex: none; }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>PRESENS O₂ Monitor</h1>
-            <div class="status-indicator">
-                <span class="status-dot" id="statusDot"></span>
-                <span id="statusText">Disconnected</span>
-            </div>
-        </header>
+    <div class="dashboard">
+        <span id="badge" class="status-badge stopped">PARADO</span>
+        <h1 style="margin: 0; font-size: 1.4rem; color: #4a5568;">PRESENS Monitor</h1>
 
         <div class="controls">
-            <button id="startBtn" class="btn btn-start">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                </svg>
-                Start
-            </button>
-            <button id="stopBtn" class="btn btn-stop" disabled>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <rect x="6" y="4" width="4" height="16"></rect>
-                    <rect x="14" y="4" width="4" height="16"></rect>
-                </svg>
-                Stop
-            </button>
-            <button id="singleBtn" class="btn btn-single">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-                One Measurement
-            </button>
+            <button style="background: #48bb78; color: white;" onclick="run('start')">START</button>
+            <button style="background: #f56565; color: white;" onclick="run('stop')">STOP</button>
         </div>
 
-        <div class="metrics">
-            <div class="metric-card oxygen">
-                <h3>Oxygen</h3>
-                <div class="metric-value">
-                    <span id="oxygenValue">--</span>
-                    <span class="unit">%</span>
-                </div>
-                <div class="metric-bar">
-                    <div class="bar-fill" id="oxygenBar"></div>
-                </div>
-            </div>
-
-            <div class="metric-card temperature">
-                <h3>Temperature</h3>
-                <div class="metric-value">
-                    <span id="temperatureValue">--</span>
-                    <span class="unit">°C</span>
-                </div>
-                <div class="metric-bar">
-                    <div class="bar-fill" id="temperatureBar"></div>
-                </div>
-            </div>
-
-            <div class="metric-card phase">
-                <h3>Phase</h3>
-                <div class="metric-value">
-                    <span id="phaseValue">--</span>
-                    <span class="unit">°</span>
-                </div>
-            </div>
-
-            <div class="metric-card amplitude">
-                <h3>Amplitude</h3>
-                <div class="metric-value">
-                    <span id="amplitudeValue">--</span>
-                    <span class="unit"></span>
+        <div class="card" style="border-left: 5px solid #667eea; margin-bottom: 20px;">
+            <div class="label">Límite Purga (Nitrógeno)</div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                <span>Objetivo: <b id="target-display">--</b>%</span>
+                <div style="display: flex; gap: 5px;">
+                    <input type="number" id="target-input" value="19.7" step="0.1" style="width: 55px; padding: 5px; border-radius: 5px; border: 1px solid #ddd;">
+                    <button class="btn-set" onclick="setT()">SET</button>
                 </div>
             </div>
         </div>
 
-        <div class="history">
-            <div class="history-header">
-                <h3>History</h3>
-                <div class="history-buttons">
-                    <button id="downloadBtn" class="btn-download">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="7 10 12 15 17 10"></polyline>
-                            <line x1="12" y1="15" x2="12" y2="3"></line>
-                        </svg>
-                        CSV
-                    </button>
-                    <button id="clearBtn" class="btn-clear">Clear</button>
-                </div>
-            </div>
-            <div id="historyContainer" class="history-list"></div>
-        </div>
-
-        <div class="last-update">
-            Last update: <span id="lastUpdate">Never</span>
+        <div class="grid">
+            <div class="card"><div class="label">Oxígeno</div><div class="value"><span id="o2">--</span> %</div></div>
+            <div class="card"><div class="label">Temperatura</div><div class="value"><span id="temp">--</span> °C</div></div>
+            <div class="card"><div class="label">Fase</div><div class="value"><span id="phase">--</span> °</div></div>
+            <div class="card"><div class="label">Amplitud</div><div class="value" style="font-size: 1.2rem;"><span id="amp">--</span></div></div>
         </div>
     </div>
 
-    <div id="csvModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Select CSV file</h2>
-                <span class="close">&times;</span>
-            </div>
-            <div id="csvList" class="csv-list"></div>
-        </div>
-    </div>
-
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        function update() {
+            fetch('/api/status').then(r => r.json()).then(data => {
+                const b = document.getElementById('badge');
+                b.innerText = data.measuring ? "MIDIENDO..." : "PARADO";
+                b.className = "status-badge " + (data.measuring ? "active" : "stopped");
+                document.getElementById('target-display').innerText = data.target;
+                if(data.measurements.length > 0) {
+                    const m = data.measurements[data.measurements.length - 1];
+                    document.getElementById('o2').innerText = m.oxygen.toFixed(2);
+                    document.getElementById('temp').innerText = m.temperature.toFixed(1);
+                    document.getElementById('phase').innerText = m.phase.toFixed(2);
+                    document.getElementById('amp').innerText = m.amplitude;
+                }
+            });
+        }
+        function run(a) { fetch('/api/'+a, {method:'POST'}).then(() => update()); }
+        function setT() {
+            const t = document.getElementById('target-input').value;
+            fetch('/api/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target: t})
+            }).then(() => { update(); alert('Límite actualizado'); });
+        }
+        setInterval(update, 2000);
+    </script>
 </body>
 </html>
