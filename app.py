@@ -12,7 +12,7 @@ app = Flask(__name__)
 sensor = PresensSensor()
 measurements = deque(maxlen=50)
 measuring = False
-INTERVALO_GUARDADO = 300 
+INTERVALO_GUARDADO = 5 # 5 segundos
 ultimo_guardado = 0
 
 target_value = 19.7 
@@ -20,9 +20,8 @@ target_unit = 'oxygen'
 
 # --- VARIABLES DE ESTADO ---
 modo_manual = False
-estado_rele_actual = "APAGADO" # Esta variable chivará el estado a la web
+estado_rele_actual = "APAGADO" 
 
-# Al arrancar, nos aseguramos de que la válvula esté apagada (3.3V)
 os.system("pinctrl set 17 op dh")
 
 def measurement_loop():
@@ -30,23 +29,13 @@ def measurement_loop():
     
     while measuring:
         try:
-            reading = sensor.read_measurement()
-            if reading:
-                o2_real = float(reading['oxygen']) 
-                reading['oxygen'] = o2_real
-                mg_l = o2_real * 0.091
-                umol_l = mg_l * 31.251
-                porcentaje_o2 = o2_real * 0.2095
-                
-                reading['porcentaje_o2'] = round(porcentaje_o2, 2)
-                reading['mg_l'] = round(mg_l, 2)
-                reading['umol_l'] = round(umol_l, 2)
-
+            r = sensor.read_measurement()
+            if r:
                 # --- LÓGICA DE RELÉ BLINDADA ---
                 if modo_manual:
-                    pass # En manual, el estado lo dictan los botones de la web
+                    pass 
                 else:
-                    valor_actual = reading.get(target_unit, o2_real)
+                    valor_actual = r.get(target_unit, r.get('oxygen_as', 0))
                     
                     if valor_actual > target_value:
                         if estado_rele_actual != "ENCENDIDO":
@@ -60,25 +49,58 @@ def measurement_loop():
                             estado_rele_actual = "APAGADO"
 
                 with threading.Lock():
-                    measurements.append(reading)
+                    measurements.append(r)
 
+                # --- GUARDADO DEL SUPER-CSV ---
                 ahora = time.time()
                 if ahora - ultimo_guardado >= INTERVALO_GUARDADO:
                     ruta_data = "/home/proteo/code/proteo/data"
                     if not os.path.exists(ruta_data): os.makedirs(ruta_data)
-                    archivo = os.path.join(ruta_data, "registro_aurora.txt")
+                    archivo = os.path.join(ruta_data, "registro_aurora.csv")
+                    
+                    cabecera = "Fecha_Hora,%a.s.,%O2,mg/L,umol/L,ug/L,hPa,Torr,ppm_gas,Temperatura_C,Fase,Amplitud_Senal,Amplitud_Ref,Error,Pulsos,PACT_mbar,Salinidad\n"
+                    
+                    # Sistema Automático Anti-Errores de Columnas
                     existe = os.path.exists(archivo)
+                    if existe:
+                        with open(archivo, "r") as f:
+                            primera_linea = f.readline()
+                        if primera_linea != cabecera:
+                            # Si detecta que es el archivo viejo, lo renombra solo
+                            os.rename(archivo, archivo.replace(".csv", f"_antiguo_{int(time.time())}.csv"))
+                            existe = False
+
                     with open(archivo, "a") as f:
                         if not existe:
-                            f.write("Fecha_Hora\t%O2 s.a.\tmg/L\tumol/L\tTemperatura\n")
+                            f.write(cabecera)
+                        
                         fecha_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        temp = reading.get('temperature', 0)
-                        f.write(f"{fecha_str}\t{o2_real:.2f}\t{mg_l:.2f}\t{umol_l:.2f}\t{temp}\n")
+                        linea_datos = (
+                            f"{fecha_str},"
+                            f"{r.get('oxygen_as',0):.2f},"
+                            f"{r.get('oxygen_o2',0):.2f},"
+                            f"{r.get('oxygen_mgl',0):.4f},"
+                            f"{r.get('oxygen_umol',0):.2f},"
+                            f"{r.get('oxygen_ugl',0):.2f},"
+                            f"{r.get('oxygen_hpa',0):.2f},"
+                            f"{r.get('oxygen_torr',0):.2f},"
+                            f"{r.get('oxygen_ppm_gas',0):.4f},"
+                            f"{r.get('temperature',0):.2f},"
+                            f"{r.get('phase',0):.2f},"
+                            f"{r.get('amplitude',0)},"
+                            f"{r.get('ref_amplitude',0)},"
+                            f"{r.get('error',0)},"
+                            f"{r.get('pulse_counter',0)},"
+                            f"{r.get('pact_mbar',0):.2f},"
+                            f"{r.get('salinity',0):.2f}\n"
+                        )
+                        f.write(linea_datos)
+                    
                     ultimo_guardado = ahora
-                    print(f"--- [OK] Guardado en TXT: {fecha_str} ---")
+                    print(f"--- [OK] Super-CSV guardado: {fecha_str} ---")
         except Exception as e:
             print(f"Error en bucle: {e}")
-        time.sleep(5)
+        time.sleep(1) 
 
 @app.route('/')
 def index():
@@ -91,13 +113,13 @@ def get_status():
         'target': target_value, 
         'target_unit': target_unit,
         'modo_manual': modo_manual,
-        'estado_rele': estado_rele_actual, # Mandamos el estado físico real a la web
+        'estado_rele': estado_rele_actual, 
         'measurements': list(measurements)
     })
 
 @app.route('/api/history')
 def get_history():
-    ruta = "/home/proteo/code/proteo/data/registro_aurora.txt"
+    ruta = "/home/proteo/code/proteo/data/registro_aurora.csv"
     if not os.path.exists(ruta): return jsonify([])
     try:
         with open(ruta, 'r') as f:
@@ -107,9 +129,9 @@ def get_history():
         last_10 = data_lines[-10:]
         history = []
         for line in last_10:
-            parts = line.strip().split('\t')
-            if len(parts) >= 5:
-                history.append({'date': parts[0], 'o2': parts[1], 'mgl': parts[2], 'umol': parts[3], 'temp': parts[4]})
+            parts = line.strip().split(',') 
+            if len(parts) >= 10: # Adaptado a las nuevas columnas
+                history.append({'date': parts[0], 'o2': parts[1], 'mgl': parts[3], 'umol': parts[4], 'temp': parts[9]})
         return jsonify(history)
     except:
         return jsonify([])
@@ -130,7 +152,7 @@ def stop():
     measuring = False
     modo_manual = False 
     os.system("pinctrl set 17 op dh")
-    estado_rele_actual = "APAGADO" # Al detener, apagamos por seguridad y actualizamos estado
+    estado_rele_actual = "APAGADO" 
     return jsonify({'status': 'stopped'})
 
 @app.route('/api/settings', methods=['POST'])

@@ -11,12 +11,14 @@
         h1 { font-size: 1.5em; color: #2c3e50; text-align: center; margin-bottom: 25px;}
         h2 { font-size: 1.2em; color: #34495e; margin-top: 0; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
 
-        .o2-display { margin: 20px 0; }
-        .o2-label { font-size: 1.2em; font-weight: bold; color: #7f8c8d; display: block; }
-        .value { font-size: 3.5em; font-weight: bold; color: #e74c3c; display: inline-block; margin: 10px 0; }
-        .unit { font-size: 1.2em; color: #95a5a6; display: inline-block; margin-left: 5px; }
+        .o2-display { margin: 20px 0; display: flex; flex-direction: column; align-items: center; }
+        .value-container { display: flex; align-items: baseline; justify-content: center; margin: 10px 0; }
+        .value { font-size: 3.5em; font-weight: bold; color: #e74c3c; }
+        .unit { font-size: 1.2em; color: #95a5a6; margin-left: 5px; }
+        .main-temp { font-size: 1.8em; font-weight: bold; color: #e67e22; margin-top: 5px; background: #fdf2e9; padding: 5px 15px; border-radius: 8px;}
 
-        .sub-values { display: flex; justify-content: space-around; background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em; }
+        .sub-values { display: flex; justify-content: space-around; background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em; flex-wrap: wrap;}
+        .sub-values div { margin: 5px; }
         .status-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
         .status { font-weight: bold; padding: 8px 12px; border-radius: 5px; display: inline-block; }
 
@@ -33,6 +35,10 @@
         table { width: 100%; border-collapse: collapse; font-size: 0.85em; white-space: nowrap; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
         th { background-color: #34495e; color: white; }
+        
+        /* Estilos Diagnóstico */
+        .diag-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; background: #eaeded; padding: 15px; border-radius: 8px; font-size: 0.9em; color: #566573;}
+        .diag-item span { font-weight: bold; color: #2c3e50; }
     </style>
 </head>
 <body>
@@ -51,20 +57,26 @@
                 <label for="unitSelector" style="display: block; margin-bottom: 5px; color: #7f8c8d; font-weight: bold;">Mostrar unidad en pantalla grande:</label>
                 <select id="unitSelector" onchange="updateMainDisplay()" style="width: 80%; max-width: 300px;">
                     <option value="porcentaje_o2">% O2 (Aire)</option>
-                    <option value="oxygen">% s.a. (Saturación)</option>
+                    <option value="oxygen_as">% s.a. (Saturación)</option>
                     <option value="mg_l">mg/L</option>
                     <option value="umol_l">µmol/L</option>
+                    <option value="oxygen_ugl">µg/L (ppb)</option>
+                    <option value="oxygen_hpa">hPa / mbar</option>
                 </select>
             </div>
 
             <div class="o2-display">
-                <span class="value" id="main-val">--</span>
-                <span class="unit" id="main-unit">% O2</span>
+                <div class="value-container">
+                    <span class="value" id="main-val">--</span>
+                    <span class="unit" id="main-unit">% O2</span>
+                </div>
+                <div class="main-temp">🌡️ <span id="main-temp-val">--</span> °C</div>
             </div>
 
             <div class="sub-values">
                 <div><strong>mg/L:</strong> <br><span id="mgl-val">--</span></div>
                 <div><strong>µmol/L:</strong> <br><span id="umol-val">--</span></div>
+                <div><strong>hPa:</strong> <br><span id="hpa-val">--</span></div>
             </div>
             <div>
                 <button class="btn-start" onclick="startMeasuring()">START</button>
@@ -89,12 +101,25 @@
                 <input type="number" id="target-input" step="0.1" value="19.7" style="width: 100px;">
                 <select id="target-unit">
                     <option value="porcentaje_o2">% O2</option>
-                    <option value="oxygen">% s.a.</option>
+                    <option value="oxygen_as">% s.a.</option>
                     <option value="mg_l">mg/L</option>
                     <option value="umol_l">µmol/L</option>
                 </select>
             </div>
             <button class="btn-set" onclick="setTarget()">Aplicar SET</button>
+        </div>
+        
+        <div class="card">
+            <h2>Diagnósticos del Sensor</h2>
+            <div class="diag-grid">
+                <div class="diag-item">Fase Óptica: <span id="diag-fase">--</span>°</div>
+                <div class="diag-item">Amp. Señal: <span id="diag-amp">--</span></div>
+                <div class="diag-item">Amp. Referencia: <span id="diag-ref">--</span></div>
+                <div class="diag-item">Pulsos de Vida: <span id="diag-pulso">--</span></div>
+                <div class="diag-item">Presión (PACT): <span id="diag-pact">--</span> mbar</div>
+                <div class="diag-item">Salinidad: <span id="diag-sal">--</span> ‰</div>
+            </div>
+            <p style="margin-top: 10px; font-size: 0.9em;">Estado de Error: <strong id="diag-error">--</strong></p>
         </div>
 
         <div class="card">
@@ -161,8 +186,8 @@
             if (unitType === 'porcentaje_o2') {
                 mainVal.innerText = lastReading.porcentaje_o2.toFixed(2);
                 mainUnit.innerText = "% O2";
-            } else if (unitType === 'oxygen') {
-                mainVal.innerText = lastReading.oxygen.toFixed(2);
+            } else if (unitType === 'oxygen_as') {
+                mainVal.innerText = lastReading.oxygen_as.toFixed(2);
                 mainUnit.innerText = "% s.a.";
             } else if (unitType === 'mg_l') {
                 mainVal.innerText = lastReading.mg_l.toFixed(2);
@@ -170,12 +195,17 @@
             } else if (unitType === 'umol_l') {
                 mainVal.innerText = lastReading.umol_l.toFixed(2);
                 mainUnit.innerText = "µmol/L";
+            } else if (unitType === 'oxygen_ugl') {
+                mainVal.innerText = lastReading.oxygen_ugl.toFixed(2);
+                mainUnit.innerText = "µg/L";
+            } else if (unitType === 'oxygen_hpa') {
+                mainVal.innerText = lastReading.oxygen_hpa.toFixed(2);
+                mainUnit.innerText = "hPa";
             }
         }
 
         function updateData() {
             fetch('/api/status').then(r => r.json()).then(data => {
-                // 1. Indicador del Sensor
                 const statusEl = document.getElementById('status-indicator');
                 if(data.measuring) {
                     statusEl.innerText = "🟢 Midiendo...";
@@ -187,15 +217,14 @@
                     statusEl.style.color = "#c0392b";
                 }
 
-                // 2. Indicador del Relé / Válvula
                 const relayEl = document.getElementById('relay-indicator');
                 if(data.estado_rele === "ENCENDIDO") {
                     relayEl.innerText = "⚡ Válvula: ABIERTA (ON)";
-                    relayEl.style.backgroundColor = "#d4efdf"; // Verde clarito
+                    relayEl.style.backgroundColor = "#d4efdf"; 
                     relayEl.style.color = "#1e8449";
                 } else {
                     relayEl.innerText = "🛑 Válvula: CERRADA (OFF)";
-                    relayEl.style.backgroundColor = "#fadbd8"; // Rojo clarito
+                    relayEl.style.backgroundColor = "#fadbd8"; 
                     relayEl.style.color = "#922b21";
                 }
 
@@ -203,7 +232,7 @@
                 
                 let unitLabel = "";
                 if(data.target_unit === "porcentaje_o2") unitLabel = "% O2";
-                else if(data.target_unit === "oxygen") unitLabel = "% s.a.";
+                else if(data.target_unit === "oxygen_as") unitLabel = "% s.a.";
                 else if(data.target_unit === "mg_l") unitLabel = "mg/L";
                 else if(data.target_unit === "umol_l") unitLabel = "µmol/L";
                 document.getElementById('current-target-unit').innerText = unitLabel;
@@ -219,8 +248,30 @@
                 if (data.measurements && data.measurements.length > 0) {
                     lastReading = data.measurements[data.measurements.length - 1];
                     updateMainDisplay(); 
+                    
+                    const tempRaw = lastReading.temperature !== undefined ? lastReading.temperature : 0;
+                    document.getElementById('main-temp-val').innerText = tempRaw.toFixed(1);
+                    
                     document.getElementById('mgl-val').innerText = lastReading.mg_l.toFixed(2);
                     document.getElementById('umol-val').innerText = lastReading.umol_l.toFixed(2);
+                    document.getElementById('hpa-val').innerText = lastReading.oxygen_hpa.toFixed(2);
+
+                    // Actualizar Diagnósticos
+                    document.getElementById('diag-fase').innerText = lastReading.phase.toFixed(2);
+                    document.getElementById('diag-amp').innerText = lastReading.amplitude;
+                    document.getElementById('diag-ref').innerText = lastReading.ref_amplitude;
+                    document.getElementById('diag-pulso').innerText = lastReading.pulse_counter.toLocaleString();
+                    document.getElementById('diag-pact').innerText = lastReading.pact_mbar;
+                    document.getElementById('diag-sal').innerText = lastReading.salinity;
+                    
+                    const errStatus = document.getElementById('diag-error');
+                    if (lastReading.error === 0) {
+                        errStatus.innerText = "✅ Todo Correcto (Cód: 0)";
+                        errStatus.style.color = "#27ae60";
+                    } else {
+                        errStatus.innerText = "⚠️ ERROR DETECTADO (Cód: " + lastReading.error + ")";
+                        errStatus.style.color = "#c0392b";
+                    }
                 }
             });
 
