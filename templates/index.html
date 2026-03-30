@@ -1,77 +1,223 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>PRESENS Monitor Pro</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Presens - Aurora</title>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
-        .dashboard { background: white; width: 100%; max-width: 500px; border-radius: 24px; padding: 30px; box-shadow: 0 20px 25px rgba(0,0,0,0.2); }
-        .status-badge { float: right; padding: 5px 15px; border-radius: 20px; font-weight: bold; font-size: 0.8rem; }
-        .active { background: #c6f6d5; color: #2f855a; }
-        .stopped { background: #fed7d7; color: #c53030; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .card { background: #f7fafc; padding: 15px; border-radius: 15px; border: 1px solid #edf2f7; }
-        .label { font-size: 0.7rem; color: #a0aec0; text-transform: uppercase; font-weight: bold; }
-        .value { font-size: 1.5rem; font-weight: bold; color: #2d3748; margin-top: 5px; }
-        .controls { display: flex; gap: 10px; margin: 20px 0; }
-        button { flex: 1; padding: 12px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; }
-        .btn-set { background: #667eea; color: white; width: auto; flex: none; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 15px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; text-align: center; }
+        h1 { font-size: 1.5em; color: #2c3e50; text-align: center; margin-bottom: 25px;}
+        h2 { font-size: 1.2em; color: #34495e; margin-top: 0; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+
+        .o2-display { margin: 20px 0; }
+        .o2-label { font-size: 1.2em; font-weight: bold; color: #7f8c8d; display: block; }
+        .value { font-size: 3.5em; font-weight: bold; color: #e74c3c; display: inline-block; margin: 10px 0; }
+        .unit { font-size: 1.2em; color: #95a5a6; display: inline-block; margin-left: 5px; }
+
+        .sub-values { display: flex; justify-content: space-around; background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em; }
+        .status { font-weight: bold; padding: 8px; border-radius: 5px; margin-bottom: 15px; display: inline-block; }
+
+        button { padding: 12px 20px; font-size: 1.1em; border: none; border-radius: 8px; cursor: pointer; margin: 5px; font-weight: bold; width: 45%; max-width: 200px; }
+        .btn-start { background-color: #2ecc71; color: white; }
+        .btn-stop { background-color: #e74c3c; color: white; }
+        .btn-set { background-color: #3498db; color: white; width: 100%; margin-top: 15px; }
+
+        .input-group { margin: 15px 0; display: flex; justify-content: center; align-items: center; gap: 10px; }
+        input[type="number"], select { padding: 12px; font-size: 1.1em; text-align: center; border: 2px solid #bdc3c7; border-radius: 8px; }
+        select { cursor: pointer; background-color: white; }
+
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85em; white-space: nowrap; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: center; }
+        th { background-color: #34495e; color: white; }
     </style>
 </head>
 <body>
-    <div class="dashboard">
-        <span id="badge" class="status-badge stopped">PARADO</span>
-        <h1 style="margin: 0; font-size: 1.4rem; color: #4a5568;">PRESENS Monitor</h1>
+    <div class="container">
+        <h1>Monitor de Oxígeno</h1>
 
-        <div class="controls">
-            <button style="background: #48bb78; color: white;" onclick="run('start')">START</button>
-            <button style="background: #f56565; color: white;" onclick="run('stop')">STOP</button>
-        </div>
+        <div class="card">
+            <h2>Nivel Actual</h2>
+            <div id="status-indicator" class="status" style="background-color: #e0e0e0;">Detenido</div>
+            
+            <div style="margin-top: 10px;">
+                <label for="unitSelector" style="display: block; margin-bottom: 5px; color: #7f8c8d; font-weight: bold;">Mostrar unidad en pantalla grande:</label>
+                <select id="unitSelector" onchange="updateMainDisplay()" style="width: 80%; max-width: 300px;">
+                    <option value="porcentaje_o2">% O2 (Aire)</option>
+                    <option value="oxygen">% s.a. (Saturación)</option>
+                    <option value="mg_l">mg/L</option>
+                    <option value="umol_l">µmol/L</option>
+                </select>
+            </div>
 
-        <div class="card" style="border-left: 5px solid #667eea; margin-bottom: 20px;">
-            <div class="label">Límite Purga (Nitrógeno)</div>
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
-                <span>Objetivo: <b id="target-display">--</b>%</span>
-                <div style="display: flex; gap: 5px;">
-                    <input type="number" id="target-input" value="19.7" step="0.1" style="width: 55px; padding: 5px; border-radius: 5px; border: 1px solid #ddd;">
-                    <button class="btn-set" onclick="setT()">SET</button>
-                </div>
+            <div class="o2-display">
+                <span class="value" id="main-val">--</span>
+                <span class="unit" id="main-unit">% O2</span>
+            </div>
+
+            <div class="sub-values">
+                <div><strong>mg/L:</strong> <br><span id="mgl-val">--</span></div>
+                <div><strong>µmol/L:</strong> <br><span id="umol-val">--</span></div>
+            </div>
+            <div>
+                <button class="btn-start" onclick="startMeasuring()">START</button>
+                <button class="btn-stop" onclick="stopMeasuring()">STOP</button>
             </div>
         </div>
 
-        <div class="grid">
-            <div class="card"><div class="label">Oxígeno</div><div class="value"><span id="o2">--</span> %</div></div>
-            <div class="card"><div class="label">Temperatura</div><div class="value"><span id="temp">--</span> °C</div></div>
-            <div class="card"><div class="label">Fase</div><div class="value"><span id="phase">--</span> °</div></div>
-            <div class="card"><div class="label">Amplitud</div><div class="value" style="font-size: 1.2rem;"><span id="amp">--</span></div></div>
+        <div class="card">
+            <h2>Control Manual de Válvula</h2>
+            <p style="color: #7f8c8d; margin-bottom: 10px;">Modo actual: <strong id="modoStatus" style="color: #34495e;">Automático</strong></p>
+            <div>
+                <button onclick="setRelay('ON')" style="background-color: #2ecc71; color: white;">FORZAR ON</button>
+                <button onclick="setRelay('OFF')" style="background-color: #e74c3c; color: white;">FORZAR OFF</button>
+            </div>
+            <button onclick="setRelay('AUTO')" class="btn-set" style="background-color: #34495e;">VOLVER A AUTOMÁTICO</button>
+        </div>
+
+        <div class="card">
+            <h2>Control de Objetivo (SET)</h2>
+            <p style="color: #7f8c8d; margin-bottom: 5px;">Objetivo Actual: <strong><span id="current-target">--</span> <span id="current-target-unit"></span></strong></p>
+            <div class="input-group">
+                <input type="number" id="target-input" step="0.1" value="19.7" style="width: 100px;">
+                <select id="target-unit">
+                    <option value="porcentaje_o2">% O2</option>
+                    <option value="oxygen">% s.a.</option>
+                    <option value="mg_l">mg/L</option>
+                    <option value="umol_l">µmol/L</option>
+                </select>
+            </div>
+            <button class="btn-set" onclick="setTarget()">Aplicar SET</button>
+        </div>
+
+        <div class="card">
+            <h2>Últimos Datos Guardados</h2>
+            <div class="table-container">
+                <table id="history-table">
+                    <thead>
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Medida</th>
+                            <th>mg/L</th>
+                            <th>µmol/L</th>
+                            <th>Temp (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <script>
-        function update() {
-            fetch('/api/status').then(r => r.json()).then(data => {
-                const b = document.getElementById('badge');
-                b.innerText = data.measuring ? "MIDIENDO..." : "PARADO";
-                b.className = "status-badge " + (data.measuring ? "active" : "stopped");
-                document.getElementById('target-display').innerText = data.target;
-                if(data.measurements.length > 0) {
-                    const m = data.measurements[data.measurements.length - 1];
-                    document.getElementById('o2').innerText = m.oxygen.toFixed(2);
-                    document.getElementById('temp').innerText = m.temperature.toFixed(1);
-                    document.getElementById('phase').innerText = m.phase.toFixed(2);
-                    document.getElementById('amp').innerText = m.amplitude;
-                }
-            });
-        }
-        function run(a) { fetch('/api/'+a, {method:'POST'}).then(() => update()); }
-        function setT() {
-            const t = document.getElementById('target-input').value;
+        let lastReading = null;
+
+        function startMeasuring() { fetch('/api/start', {method: 'POST'}); }
+        function stopMeasuring() { fetch('/api/stop', {method: 'POST'}); }
+        
+        function setTarget() {
+            const val = document.getElementById('target-input').value;
+            const unit = document.getElementById('target-unit').value;
             fetch('/api/settings', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({target: t})
-            }).then(() => { update(); alert('Límite actualizado'); });
+                body: JSON.stringify({target: val, unit: unit})
+            });
         }
-        setInterval(update, 2000);
+
+        function setRelay(accion) {
+            fetch('/api/relay/manual', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ accion: accion })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if(accion === "AUTO") {
+                    document.getElementById('modoStatus').innerText = "Automático";
+                    document.getElementById('modoStatus').style.color = "#34495e";
+                } else {
+                    document.getElementById('modoStatus').innerText = "MANUAL - " + (accion === "ON" ? "ENCENDIDO" : "APAGADO");
+                    document.getElementById('modoStatus').style.color = "#e74c3c";
+                }
+            });
+        }
+
+        function updateMainDisplay() {
+            if (!lastReading) return;
+            
+            const unitType = document.getElementById('unitSelector').value;
+            const mainVal = document.getElementById('main-val');
+            const mainUnit = document.getElementById('main-unit');
+
+            if (unitType === 'porcentaje_o2') {
+                mainVal.innerText = lastReading.porcentaje_o2.toFixed(2);
+                mainUnit.innerText = "% O2";
+            } else if (unitType === 'oxygen') {
+                mainVal.innerText = lastReading.oxygen.toFixed(2);
+                mainUnit.innerText = "% s.a.";
+            } else if (unitType === 'mg_l') {
+                mainVal.innerText = lastReading.mg_l.toFixed(2);
+                mainUnit.innerText = "mg/L";
+            } else if (unitType === 'umol_l') {
+                mainVal.innerText = lastReading.umol_l.toFixed(2);
+                mainUnit.innerText = "µmol/L";
+            }
+        }
+
+        function updateData() {
+            fetch('/api/status').then(r => r.json()).then(data => {
+                const statusEl = document.getElementById('status-indicator');
+                if(data.measuring) {
+                    statusEl.innerText = "🟢 Midiendo...";
+                    statusEl.style.backgroundColor = "#e8f8f5";
+                    statusEl.style.color = "#27ae60";
+                } else {
+                    statusEl.innerText = "🔴 Detenido";
+                    statusEl.style.backgroundColor = "#fdedec";
+                    statusEl.style.color = "#c0392b";
+                }
+
+                document.getElementById('current-target').innerText = data.target;
+                
+                // Actualizar etiqueta visual de la unidad del SET
+                let unitLabel = "";
+                if(data.target_unit === "porcentaje_o2") unitLabel = "% O2";
+                else if(data.target_unit === "oxygen") unitLabel = "% s.a.";
+                else if(data.target_unit === "mg_l") unitLabel = "mg/L";
+                else if(data.target_unit === "umol_l") unitLabel = "µmol/L";
+                document.getElementById('current-target-unit').innerText = unitLabel;
+                
+                if (data.modo_manual) {
+                    document.getElementById('modoStatus').innerText = "MANUAL (Activo)";
+                    document.getElementById('modoStatus').style.color = "#e74c3c";
+                } else {
+                    document.getElementById('modoStatus').innerText = "Automático";
+                    document.getElementById('modoStatus').style.color = "#34495e";
+                }
+
+                if (data.measurements && data.measurements.length > 0) {
+                    lastReading = data.measurements[data.measurements.length - 1];
+                    updateMainDisplay(); 
+                    document.getElementById('mgl-val').innerText = lastReading.mg_l.toFixed(2);
+                    document.getElementById('umol-val').innerText = lastReading.umol_l.toFixed(2);
+                }
+            });
+
+            fetch('/api/history').then(r => r.json()).then(data => {
+                const tbody = document.querySelector('#history-table tbody');
+                tbody.innerHTML = '';
+                data.forEach(row => {
+                    tbody.innerHTML += `<tr><td>${row.date}</td><td><strong>${row.o2}</strong></td><td>${row.mgl}</td><td>${row.umol}</td><td>${row.temp}</td></tr>`;
+                });
+            });
+        }
+
+        setInterval(updateData, 5000);
+        updateData();
     </script>
 </body>
 </html>
