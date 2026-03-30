@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_file
 import threading
 import time
 import os
@@ -66,7 +66,6 @@ def measurement_loop():
                         with open(archivo, "r") as f:
                             primera_linea = f.readline()
                         if primera_linea != cabecera:
-                            # Si detecta que es el archivo viejo, lo renombra solo
                             os.rename(archivo, archivo.replace(".csv", f"_antiguo_{int(time.time())}.csv"))
                             existe = False
 
@@ -130,11 +129,19 @@ def get_history():
         history = []
         for line in last_10:
             parts = line.strip().split(',') 
-            if len(parts) >= 10: # Adaptado a las nuevas columnas
+            if len(parts) >= 10: 
                 history.append({'date': parts[0], 'o2': parts[1], 'mgl': parts[3], 'umol': parts[4], 'temp': parts[9]})
         return jsonify(history)
     except:
         return jsonify([])
+
+# --- NUEVA RUTA PARA DESCARGAR EL CSV ---
+@app.route('/api/download')
+def download_csv():
+    ruta = "/home/proteo/code/proteo/data/registro_aurora.csv"
+    if os.path.exists(ruta):
+        return send_file(ruta, as_attachment=True, download_name="registro_aurora.csv")
+    return "Archivo no encontrado", 404
 
 @app.route('/api/start', methods=['POST'])
 def start():
