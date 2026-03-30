@@ -17,7 +17,8 @@
         .unit { font-size: 1.2em; color: #95a5a6; display: inline-block; margin-left: 5px; }
 
         .sub-values { display: flex; justify-content: space-around; background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 15px; font-size: 0.9em; }
-        .status { font-weight: bold; padding: 8px; border-radius: 5px; margin-bottom: 15px; display: inline-block; }
+        .status-container { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        .status { font-weight: bold; padding: 8px 12px; border-radius: 5px; display: inline-block; }
 
         button { padding: 12px 20px; font-size: 1.1em; border: none; border-radius: 8px; cursor: pointer; margin: 5px; font-weight: bold; width: 45%; max-width: 200px; }
         .btn-start { background-color: #2ecc71; color: white; }
@@ -40,7 +41,11 @@
 
         <div class="card">
             <h2>Nivel Actual</h2>
-            <div id="status-indicator" class="status" style="background-color: #e0e0e0;">Detenido</div>
+            
+            <div class="status-container">
+                <div id="status-indicator" class="status" style="background-color: #e0e0e0;">Detenido</div>
+                <div id="relay-indicator" class="status" style="background-color: #e0e0e0;">Válvula: --</div>
+            </div>
             
             <div style="margin-top: 10px;">
                 <label for="unitSelector" style="display: block; margin-bottom: 5px; color: #7f8c8d; font-weight: bold;">Mostrar unidad en pantalla grande:</label>
@@ -170,6 +175,7 @@
 
         function updateData() {
             fetch('/api/status').then(r => r.json()).then(data => {
+                // 1. Indicador del Sensor
                 const statusEl = document.getElementById('status-indicator');
                 if(data.measuring) {
                     statusEl.innerText = "🟢 Midiendo...";
@@ -181,9 +187,20 @@
                     statusEl.style.color = "#c0392b";
                 }
 
+                // 2. Indicador del Relé / Válvula
+                const relayEl = document.getElementById('relay-indicator');
+                if(data.estado_rele === "ENCENDIDO") {
+                    relayEl.innerText = "⚡ Válvula: ABIERTA (ON)";
+                    relayEl.style.backgroundColor = "#d4efdf"; // Verde clarito
+                    relayEl.style.color = "#1e8449";
+                } else {
+                    relayEl.innerText = "🛑 Válvula: CERRADA (OFF)";
+                    relayEl.style.backgroundColor = "#fadbd8"; // Rojo clarito
+                    relayEl.style.color = "#922b21";
+                }
+
                 document.getElementById('current-target').innerText = data.target;
                 
-                // Actualizar etiqueta visual de la unidad del SET
                 let unitLabel = "";
                 if(data.target_unit === "porcentaje_o2") unitLabel = "% O2";
                 else if(data.target_unit === "oxygen") unitLabel = "% s.a.";

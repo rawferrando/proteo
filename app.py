@@ -15,26 +15,24 @@ measuring = False
 INTERVALO_GUARDADO = 300 
 ultimo_guardado = 0
 
-# --- NUEVAS VARIABLES DE OBJETIVO MULTI-UNIDAD ---
 target_value = 19.7 
-target_unit = 'oxygen' # Por defecto %s.a. (Internamente 'oxygen')
+target_unit = 'oxygen' 
 
-# --- VARIABLES MODO MANUAL ---
+# --- VARIABLES DE ESTADO ---
 modo_manual = False
-estado_rele_manual = "APAGADO"
+estado_rele_actual = "APAGADO" # Esta variable chivará el estado a la web
 
-# Al arrancar, nos aseguramos de que la válvula esté apagada (3.3V en el GPIO 17)
+# Al arrancar, nos aseguramos de que la válvula esté apagada (3.3V)
 os.system("pinctrl set 17 op dh")
 
 def measurement_loop():
-    global measuring, target_value, target_unit, ultimo_guardado, modo_manual, estado_rele_manual
-    estado_rele = "APAGADO" 
+    global measuring, target_value, target_unit, ultimo_guardado, modo_manual, estado_rele_actual
     
     while measuring:
         try:
             reading = sensor.read_measurement()
             if reading:
-                o2_real = float(reading['oxygen']) # Esto es el %a.s.
+                o2_real = float(reading['oxygen']) 
                 reading['oxygen'] = o2_real
                 mg_l = o2_real * 0.091
                 umol_l = mg_l * 31.251
@@ -44,29 +42,26 @@ def measurement_loop():
                 reading['mg_l'] = round(mg_l, 2)
                 reading['umol_l'] = round(umol_l, 2)
 
-                # --- LÓGICA CON COMANDOS EXTERNOS (BLINDADA) ---
+                # --- LÓGICA DE RELÉ BLINDADA ---
                 if modo_manual:
-                    # Si estamos en manual, ignoramos el target y mantenemos el estado de los botones
-                    pass
+                    pass # En manual, el estado lo dictan los botones de la web
                 else:
-                    # Lógica automática: Compara usando la unidad elegida por el usuario
                     valor_actual = reading.get(target_unit, o2_real)
                     
                     if valor_actual > target_value:
-                        if estado_rele != "ENCENDIDO":
-                            print(f"DEBUG: {target_unit} ({valor_actual}) > SET ({target_value}) -> COMANDO EXTERNO: ON (0V)")
+                        if estado_rele_actual != "ENCENDIDO":
+                            print(f"DEBUG: {target_unit} ({valor_actual}) > SET ({target_value}) -> ON (0V)")
                             os.system("pinctrl set 17 op dl") 
-                            estado_rele = "ENCENDIDO"
+                            estado_rele_actual = "ENCENDIDO"
                     else:
-                        if estado_rele != "APAGADO":
-                            print(f"DEBUG: {target_unit} ({valor_actual}) <= SET ({target_value}) -> COMANDO EXTERNO: OFF (3.3V)")
+                        if estado_rele_actual != "APAGADO":
+                            print(f"DEBUG: {target_unit} ({valor_actual}) <= SET ({target_value}) -> OFF (3.3V)")
                             os.system("pinctrl set 17 op dh") 
-                            estado_rele = "APAGADO"
+                            estado_rele_actual = "APAGADO"
 
                 with threading.Lock():
                     measurements.append(reading)
 
-                # Guardado en TXT (Intacto)
                 ahora = time.time()
                 if ahora - ultimo_guardado >= INTERVALO_GUARDADO:
                     ruta_data = "/home/proteo/code/proteo/data"
@@ -96,6 +91,7 @@ def get_status():
         'target': target_value, 
         'target_unit': target_unit,
         'modo_manual': modo_manual,
+        'estado_rele': estado_rele_actual, # Mandamos el estado físico real a la web
         'measurements': list(measurements)
     })
 
@@ -130,10 +126,11 @@ def start():
 
 @app.route('/api/stop', methods=['POST'])
 def stop():
-    global measuring, modo_manual
+    global measuring, modo_manual, estado_rele_actual
     measuring = False
     modo_manual = False 
     os.system("pinctrl set 17 op dh")
+    estado_rele_actual = "APAGADO" # Al detener, apagamos por seguridad y actualizamos estado
     return jsonify({'status': 'stopped'})
 
 @app.route('/api/settings', methods=['POST'])
@@ -146,7 +143,7 @@ def settings():
 
 @app.route('/api/relay/manual', methods=['POST'])
 def relay_manual():
-    global modo_manual, estado_rele_manual
+    global modo_manual, estado_rele_actual
     data = request.get_json()
     accion = data.get('accion') 
 
@@ -157,12 +154,12 @@ def relay_manual():
     modo_manual = True
     if accion == "ON":
         os.system("pinctrl set 17 op dl") 
-        estado_rele_manual = "ENCENDIDO"
+        estado_rele_actual = "ENCENDIDO"
     elif accion == "OFF":
         os.system("pinctrl set 17 op dh") 
-        estado_rele_manual = "APAGADO"
+        estado_rele_actual = "APAGADO"
         
-    return jsonify({'status': f'Modo Manual: {estado_rele_manual}'})
+    return jsonify({'status': f'Modo Manual: {estado_rele_actual}'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
